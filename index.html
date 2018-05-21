@@ -1,0 +1,508 @@
+<html>
+<head>
+</head>
+<body>
+
+<script  src="lib/artoolkit.min.js"></script>
+<script  src="lib/three.js"></script>
+<script  src="lib/artoolkit.three.js"></script>
+<script  src="lib/inflate.min.js"></script>
+<script  src="lib/loaders/FBXLoader.js"></script>
+<script  src="lib/loaders/OBJLoader.js"></script>
+<script src="lib/Effects/Butterfly.js"></script>
+<script>
+
+
+var ModelFormat=
+{
+	FBX:"fbx",
+	OBJ:"obj",
+	JSON:"json",
+}
+
+//识别图特征集数据文件路径
+var markerUrl = "data/dataNFT/icon";
+var markerRootObj;
+//模型格式
+var format = "obj";
+//模型文件路径
+var modelFielUrl = "data/model/obj/bottle.obj";
+
+var renderFuncs = [];
+var arSceneRootVisable = false;
+var butterflys = [];
+//蝴蝶翅膀图片数组
+var leftWingTexArray = [];
+var rightWingTexArray = [];
+//蝴蝶翅膀图片根路径
+var wingTexturePath = "data/textures/butterfly-wing/";
+//是否已经识别
+var hasFinded = false;
+var lastCalculateTime = 0;
+
+var effectObjRoot;
+var logoRoot;
+
+//使用静态模式
+var useStaticMode = true;
+//限制识别速率
+var limitDetectRate = true;
+//识别时间间隔
+var detectDelta =10000;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+window.ARThreeOnLoad = 
+
+function() 
+{
+	ARController.getUserMediaThreeScene
+	(
+	{
+		maxARVideoSize: 280, 
+		cameraParam: 'data/camera_para.dat', 
+	
+	onSuccess: function(arScene, arController, arCamera) 
+	{
+
+		document.body.className = arController.orientation;
+
+		var renderer = new THREE.WebGLRenderer({antialias: true,alpha:true,autoClear:true});
+		
+		if (arController.orientation === 'portrait') 
+		{
+			//alert("vide type : portrait");
+			//手机平台
+		//	var w = (window.innerWidth / arController.videoHeight) * arController.videoWidth;
+		//	var h = window.innerWidth;
+			//renderer.setSize(w, h);
+			renderer.setSize(window.innerWidth,window.innerHeight);
+			//	renderer.domElement.style.paddingBottom = (w-h) + 'px';
+		} 
+		else 
+		{
+			//alert("video type : landscape");
+			if (/Android|mobile|iPad|iPhone/i.test(navigator.userAgent)) 
+			{
+				renderer.setSize(window.innerWidth, (window.innerWidth / arController.videoWidth) * arController.videoHeight);
+			} 
+			else 
+			{
+				renderer.setSize(arController.videoWidth, arController.videoHeight);
+				
+				document.body.className += ' desktop';
+			}
+		}
+
+		renderer.domElement.style.zIndex = "1000";
+		renderer.domElement.style.position = "absolute";
+		renderer.domElement.style.top = "0px";
+		renderer.domElement.style.left = "0px";
+		document.body.appendChild(renderer.domElement);
+		var rotationV = 0;
+		
+		var rotationTarget = 0;
+
+		renderer.domElement.addEventListener
+		(
+			'click', 
+			function(ev) 
+			{
+				ev.preventDefault();
+				rotationTarget += 1;
+			}, 
+			false
+		);
+
+		var modelRoot = new THREE.Group;
+		
+		lightSetting(arScene);
+		
+		//loadDefaultModel(arScene.scene);
+				
+		//loadDefaultModel(modelRoot);
+		//加载模型
+		//loadModel(format,modelRoot);
+		
+		//创建特效的根物体
+		effectObjRoot = new THREE.Group;
+		effectObjRoot.visible = false;
+		arScene.scene.add(effectObjRoot);
+		var boxMesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0xffffff}));
+		boxMesh.position.set(10,0,10);
+		arScene.scene.add(boxMesh);
+		
+		if(useStaticMode)
+		//创建蝴蝶特效
+		{
+			CreateButtterflyEffect(5,effectObjRoot);
+			LoadLogoTexture(effectObjRoot);
+		}
+		else
+		{
+			CreateButtterflyEffect(5,modelRoot);
+			LoadLogoTexture(modelRoot);
+		}
+	//	alert("effect load completed");
+		
+		renderFuncs.push(function()
+		{
+		//	if(arSceneRootVisable)
+				butterflys.forEach(function(butfly){butfly.fly();});
+		});
+		
+		
+		//将模型和识别图绑定
+		arController.loadNFTMarker
+		(
+			markerUrl, 
+			function(markerId) 
+			{
+				var markerRoot = markerRootObj = arController.createThreeNFTMarker(markerId);
+				//markerRootObj = markerRoot;
+				markerRoot.add(modelRoot);
+				arScene.scene.add(markerRoot);
+			}
+		);
+
+		var tick = function() 
+		{
+			if(limitDetectRate)
+			{
+			
+				if(useStaticMode)
+				{	
+					var currentTime = new Date().getTime();
+
+					if(hasFinded)
+					{
+						var delta = currentTime - lastCalculateTime;
+
+						if(delta > detectDelta)
+						{
+							arScene.process();
+							lastCalculateTime = currentTime;
+
+						}
+					}
+					else
+					{
+						arScene.process();
+					}
+				}
+			}
+			else		
+				arScene.process();
+				
+			arScene.renderOn(renderer);
+		//	console.log(arScene.camera.position);
+			renderFuncs.forEach(function(func)
+			{
+				func();
+			});
+			requestAnimationFrame(tick);
+		};
+
+		tick();
+		requestFullScreen(renderer.domElement);
+		function requestFullScreen(element) 
+		{
+			 var requestMethod = element.requestFullScreen || element.webkitRequestFullScreen || element.mozRequestFullScreen || element.msRequestFullScreen;
+			 requestMethod.call(element);
+		};
+
+	}});
+
+	delete window.ARThreeOnLoad;
+
+};
+
+function lightSetting(arScene)
+{
+	var directionalLight = new THREE.DirectionalLight({color:0xffffff});
+	directionalLight.position.set(-100,100,-100);
+
+	
+	var ambientLight = new THREE.AmbientLight( 0xffffff,1 );
+	arScene.scene.add( ambientLight );
+	
+	arScene.scene.add(directionalLight);
+	
+}
+
+//将模型加到指定的object3d对象中
+function loadModel(modelFormat,modelRoot)
+{
+	switch(modelFormat)
+	{
+		case ModelFormat.FBX:
+			loadFbxModel(modelFielUrl, modelRoot);
+		break;
+		case ModelFormat.OBJ:
+			loadObjModel(modelFielUrl, modelRoot);
+		break;
+		case ModelFormat.JSON:
+		break;
+		default:
+			loadDefaultModel(modelRoot);
+		break;
+	}
+}
+
+function loadDefaultModel(modelRoot)
+{
+	var sphere = new THREE.Mesh
+	(
+		new THREE.SphereGeometry(0.5, 8, 8),
+		new THREE.MeshNormalMaterial()
+	);
+	
+	sphere.material.shading = THREE.FlatShading;
+	sphere.position.z = 0;
+	sphere.position.x = 0;
+	sphere.position.y = 0;
+	sphere.scale.set(200,200,200);
+	modelRoot.add(sphere);
+}
+
+//加载FBX模型
+function loadFbxModel(modelUrl,modelRoot)
+{
+	var loader = new THREE.FBXLoader();
+	loader.load
+	(
+		modelUrl,		
+		
+		function (object)
+		{
+			modelRoot.add(object);
+			
+		},
+		function (progress)
+		{
+			var rate = 100 * progress.loaded / progress.total;
+			console.log("load rate:  "+rate + "%");
+		},
+		function (error)
+		{
+			console.error(error);
+		}
+	);
+}
+//加载OBJ模型
+function loadObjModel(modelUrl,modelRoot)
+{
+	var manager = new THREE.LoadingManager();
+	var loader = new THREE.OBJLoader(manager);
+	loader.load
+	(
+		modelUrl,		
+		
+		function (object)
+		{
+			var size = 0.8;
+			
+			object.scale.set(size, size, size);
+
+			object.position.set(100,0,-200);			
+			object.traverse(function(child)
+			{
+				if(child instanceof THREE.Mesh)
+				{
+					//child.material = new THREE.MeshNormalMaterial();
+					//child.material.shading = THREE.FlatShading;
+					child.material = new THREE.MeshLambertMaterial({color: 0xffffff});
+					setted = true;
+					//child.material.side = THREE.BackSide;
+				}
+			});
+			
+			renderFuncs.push
+			(				
+				function()
+				{
+					object.rotation.y += 0.1;		
+				}
+			);
+			modelRoot.add(object);
+			
+			
+		},
+		function (progress)
+		{
+			var rate = 100 * progress.loaded / progress.total;
+			console.log("load rate:  "+rate + "%");
+		},
+		function (error)
+		{
+			console.error(error);
+		}
+	);
+}
+
+function loadButterflyWingTexture()
+{
+	var wingName = ["pink-wing","blue-wing","green-wing","yellow-wing"];
+	for(var i = 0;i<4;++i)
+	{
+		var loader = new THREE.TextureLoader();
+		leftWingTexArray[i]  =  loader.load(wingTexturePath + wingName[i]+"_left.png");
+		rightWingTexArray[i] =  loader.load(wingTexturePath + wingName[i]+"_right.png");
+	}
+}
+
+/*
+*创建蝴蝶特效
+*/
+function CreateButtterflyEffect(num,root,color)
+{
+
+	
+	//if(butterflyWingTexArray === null || butterflyWingTexArray.lenght === 0)
+	loadButterflyWingTexture();
+	
+	
+	var leftWingTexture = leftWingTexArray[0];
+	var rightWingTexture = rightWingTexArray[0];
+	var leftWingMaterial = new THREE.MeshLambertMaterial
+	(
+		{
+			map: leftWingTexture,
+             side:THREE.DoubleSide,//两面可见
+             transparent:true,
+			alpha:0.5
+		}
+	);
+	var rightWingMatertial = new THREE.MeshLambertMaterial
+	(
+		{
+			map: rightWingTexture,
+             side:THREE.DoubleSide,//两面可见
+             transparent:true,
+			alpha:0.5
+		}
+	);
+	for(var i =0; i < num; ++i)
+	{
+		var butterfly = new Butterfly
+		(
+			{
+				moveSpeed :50,
+				flipRate : (Math.random()*0.5 + 0.5) *10,
+				size : Math.random()*0.5 + 0.5,
+				leftWingMat:leftWingMaterial,
+				rightWingMat:rightWingMatertial,				
+			}
+		);
+
+		butterfly.setRoot(root);
+		butterflys.push(butterfly);
+	}
+	
+	renderFuncs.push(function()
+	{
+		if(markerRootObj !== undefined)
+		{
+			hasFinded = markerRootObj.visible;
+			//return;
+		//console.log(markerRootObj.visible);
+			if( markerRootObj.visible)
+			{
+				//if(!hasFinded)
+				//{	
+					if(arSceneRootVisable === false)//重新显示
+					{
+						var colorSeed = Math.floor( Math.random() * 4.0);
+						var left = leftWingTexArray[colorSeed];
+						var right = rightWingTexArray[colorSeed];
+						butterflys.forEach(function(butfly)
+						{
+							butfly.changeWingTexture(left,right);
+						});
+					}
+					arSceneRootVisable = true;
+					hasFinded = true;
+			//	}
+			}
+			else
+			{
+				arSceneRootVisable = false;
+				hasFinded = false;
+				//alert("lost target");
+			}
+		}
+	});
+
+	renderFuncs.push(function()
+	{
+		if(hasFinded)
+		{
+			//console.log("hasFinded");
+			effectObjRoot.visible = true;
+		//	console.log(effectObjRoot.position);
+			effectObjRoot.position.set(-300,-100,500);
+			effectObjRoot.scale.x = 2;
+			
+		}
+		else
+		{
+			effectObjRoot.visible = false;
+		}
+	}
+	);
+	
+}
+
+
+function LoadLogoTexture(modelRoot)
+{
+	var scale = 1946/1315;
+	var realWitdh = 150;
+	var logoGeo = new THREE.PlaneGeometry(realWitdh,realWitdh /scale);
+	var logoTex = new THREE.TextureLoader().load("data/textures/char_logo.png");
+	//logoTex.flipY = true;
+	var logoMat = new THREE.MeshLambertMaterial
+	(
+		{
+			map:logoTex,
+			side:THREE.DoubleSide,//两面可见
+             //transparent:true,
+			//alpha:0.5
+		}
+	);
+	var logoMesh = new THREE.Mesh(logoGeo,logoMat);
+	logoRoot = new THREE.Object3D();
+	logoRoot.add(logoMesh);
+	logoMesh.translateY(realWitdh /scale * 0.5);
+	logoMesh.translateX(110);
+	logoMesh.position.z = 110;
+	logoMesh.rotation.z += Math.PI;
+	logoMesh.rotation.y += Math.PI;
+	logoMesh.scale.multiplyScalar (0.7);
+	modelRoot.add(logoRoot);
+}
+</script>
+
+
+<script>
+	if (window.ARController && ARController.getUserMediaThreeScene) 
+	{
+		ARThreeOnLoad();
+	}
+</script>
+
+</body>
+</html>
