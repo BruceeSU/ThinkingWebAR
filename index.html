@@ -191,6 +191,18 @@ function()
 
 					if(hasFinded)
 					{
+						var videoEle = document.getElementById("camVideo");
+					//	alert(videoEle);
+						if(videoEle != null)
+						{
+							//alert("ready to remove video element");
+							if(isiOS)
+							{
+								videoEle.srcObject = null;
+								document.body.removeChild(videoEle);
+							}
+						}
+						
 						var delta = currentTime - lastCalculateTime;
 
 						if(delta > detectDelta)
