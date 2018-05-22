@@ -83,6 +83,7 @@ window.ARThreeOnLoad =
 
 function() 
 {
+
 	ARController.getUserMediaThreeScene
 	(
 	{
@@ -191,17 +192,7 @@ function()
 
 					if(hasFinded)
 					{
-						var videoEle = document.getElementById("camVideo");
-					//	alert(videoEle);
-						if(videoEle != null)
-						{
-							//alert("ready to remove video element");
-							if(isiOS)
-							{
-								videoEle.srcObject = null;
-								document.body.removeChild(videoEle);
-							}
-						}
+
 						
 						var delta = currentTime - lastCalculateTime;
 
@@ -224,6 +215,7 @@ function()
 			renderFuncs.forEach(function(func)
 			{
 				func();
+				//document.getElementById("camVideo").play();
 			});
 			requestAnimationFrame(tick);
 		};
@@ -357,7 +349,7 @@ function LoadLogoTexture(modelRoot)
 		{
 			map:logoTex,
 			side:THREE.DoubleSide,//两面可见
-             //transparent:true,
+             transparent:true,
 			//alpha:0.5
 		}
 	);
